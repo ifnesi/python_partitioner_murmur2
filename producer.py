@@ -290,7 +290,7 @@ if __name__ == "__main__":
                 matched_keys += 1
             else:
                 exception_keys.append(
-                    f"Key {key} on topic '{args.topic}' is {partition}, whereas on '{ksqldb_topic}' is {partition_ksqldb}"
+                    f"Key '{key}': '{args.topic}' = {partition} | '{ksqldb_topic}' = {partition_ksqldb}"
                 )
         print(f" - Matched partitions: {100 * matched_keys / total_keys:.2f}%")
         for e in exception_keys:
