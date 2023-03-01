@@ -33,7 +33,7 @@ class Murmur2Partitioner:
         # https://github.com/apache/kafka/blob/0.8.2/clients/src/main/java/org/apache/kafka/clients/producer/internals/Partitioner.java#L69
         # Binary multiplication by 0x7FFFFFFF to make it a positive number
         if key is None:
-            # Emnulate murmur2_random partitioner
+            # Emulate murmur2_random partitioner
             return int(random.random() * 999999999999999) % partitions
         else:
             return (self._murmur2(key) & 0x7FFFFFFF) % partitions
