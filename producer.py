@@ -76,7 +76,7 @@ def ksqldb(
         else:
             raise Exception(f"{response.text} (Status code {response.status_code})")
     except Exception as err:
-        print(f"ERROR Unable to send request to '{url}': {err}")
+        print(f"ERROR: Unable to send request to '{url}': {err}")
 
 
 if __name__ == "__main__":
