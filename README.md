@@ -48,7 +48,7 @@ options:
 
 ## Running script
 - Start up docker compose: `docker-compose up -d`
-- Waiting until you can access C3: `http://127.0.0.1:9021/`
+- Waiting until you can access C3: `http://127.0.0.1:9021/` and the ksqlDB cluster is up: `http://127.0.0.1:8088/`
 - Running python script (using murmur2_random partitioner): `python3 producer.py --messages 25 --random_keys --verbose`
 ```
 Creating topic: test_topic...
