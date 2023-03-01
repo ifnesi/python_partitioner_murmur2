@@ -1,0 +1,2 @@
+confluent_kafka==2.0.2
+requests==2.28.2
