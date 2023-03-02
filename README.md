@@ -5,6 +5,20 @@ There is no common partitioner for all Apache Kafka resources/libs/clients. For 
 So, if a producer using python (confluent_kafka lib, for example) and Source Connector (Java) are producing data to Kafka, then very likely a merge on ksqlDB would not work properly as there would be a partition mismatch.<br><br>
 The python script on this demo can use either crc32 or murmu2_random as the partitioner. It will produce messages both to the topic `{topic}` (as set when running the python script) as well as to a ksqlDB stream and have it stored on the topic `{topic}-ksql`.
 
+## Demo diagram
+![image](docs/demo_diagram.png)
+
+## Installation and Configuration
+- Docker Desktop and Python +3.8 required
+- Install python virtual environment: `python3 -m pip install venv`
+- Clone this repo: `git clone git@github.com:ifnesi/python_partitioner_murmur2.git`
+- Go to the folder where the repo was cloned: `cd python_partitioner_murmur2`
+- Create a virtual environment: `python3 -m venv _venv`
+- Activate the virtual environment: `source _venv/bin/activate`
+- Install project requirements: `python3 -m pip install -f requirements.txt`
+- Deactivate the virtual environment: `deactivate`
+
+## Python script usage
 ```
 usage: producer.py [-h]
                    [--topic TOPIC]
@@ -35,16 +49,6 @@ options:
                         ksqlDB endpoint (default is 'http://localhost:8088')
   --debug               Set logging level to debug
 ```
-
-## Installation and Configuration
-- Docker Desktop and Python +3.8 required
-- Install python virtual environment: `python3 -m pip install venv`
-- Clone this repo: `git clone git@github.com:ifnesi/python_partitioner_murmur2.git`
-- Go to the folder where the repo was cloned: `cd python_partitioner_murmur2`
-- Create a virtual environment: `python3 -m venv _venv`
-- Activate the virtual environment: `source _venv/bin/activate`
-- Install project requirements: `python3 -m pip install -f requirements.txt`
-- Deactivate the virtual environment: `deactivate`
 
 ## Running the demo
 - Activate the virtual environment: `source _venv/bin/activate`
