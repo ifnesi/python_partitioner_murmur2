@@ -14,18 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
 import json
 import time
 import uuid
 import random
 import socket
+import logging
 import argparse
-import requests
 
-from functools import partial
 from confluent_kafka import Producer, Consumer
 from confluent_kafka.admin import AdminClient, NewTopic
 
+from utils import delivery_callback, ksqldb, http_request
 from utils.murmur2 import Murmur2Partitioner
 
 
@@ -36,47 +37,6 @@ DEFAULT_MESSAGES = 10
 DEFAULT_BOOTSTRAP_SERVER = "localhost:9092"
 DEFAULT_KSQLDB_ENDPOINT = "http://localhost:8088"
 keys_validate = dict()
-
-
-# General functions
-def delivery_callback(verbose, err, msg):
-    if err:
-        print(f"Message failed delivery for key '{msg.key().decode()}': {err}")
-    else:
-        if verbose:
-            print(
-                f"Message key '{msg.key().decode()}' delivered to topic '{msg.topic()}', partition #{msg.partition()}, offset #{msg.offset()}"
-            )
-
-
-def ksqldb(
-    end_point: str,
-    statement: str,
-    verbose: bool = False,
-):
-    try:
-        url = f"{end_point.strip('/')}/ksql"
-        response = requests.post(
-            url=url,
-            headers={
-                "Accept": "application/vnd.ksql.v1+json",
-                "Content-Type": "application/vnd.ksql.v1+json; charset=utf-8",
-            },
-            json={
-                "ksql": statement,
-                "streamsProperties": {
-                    "ksql.streams.auto.offset.reset": "earliest",
-                    "ksql.streams.cache.max.bytes.buffering": "0",
-                },
-            },
-        )
-        if response.status_code == 200:
-            if verbose:
-                print(f"ksqlDB ({response.status_code}): {statement}")
-        else:
-            raise Exception(f"{response.text} (Status code {response.status_code})")
-    except Exception as err:
-        print(f"ERROR: Unable to send request to '{url}': {err}")
 
 
 if __name__ == "__main__":
@@ -138,12 +98,26 @@ if __name__ == "__main__":
         default=DEFAULT_KSQLDB_ENDPOINT,
     )
     parser.add_argument(
-        "--verbose",
-        dest="verbose",
-        help=f"Display logs",
+        "--debug",
+        dest="log_level_debug",
+        help=f"Set logging level to debug",
         action="store_true",
     )
     args = parser.parse_args()
+
+    # Set logging
+    logging.basicConfig(
+        format=f"%(levelname)s %(asctime)s.%(msecs)03d - %(message)s",
+        level=logging.DEBUG if args.log_level_debug else logging.INFO,
+        datefmt="%H:%M:%S",
+    )
+
+    # Validate access to ksqlDB
+    print("")
+    logging.info(f"Validating access to ksqlDB: {args.ksqldb_endpoint}...")
+    status_code, response = http_request(args.ksqldb_endpoint, method="GET")
+    if status_code != 200:
+        sys.exit(0)
 
     # Set Kafka config
     kafka_config = {
@@ -156,7 +130,8 @@ if __name__ == "__main__":
 
     # Create topic if not created already
     kafka_admin_client = AdminClient(kafka_config)
-    print(f"Creating topic: {args.topic}...")
+    print("")
+    logging.info(f"Creating topic: {args.topic}...")
     if dict(kafka_admin_client.list_topics().topics).get(args.topic) is None:
         kafka_admin_client.create_topics(
             [
@@ -170,11 +145,11 @@ if __name__ == "__main__":
 
     # Create ksqlDB stream/topic
     ksqldb_topic = f"{args.topic}_ksql".replace("-", "_")
-    print(f"Creating ksqlDB Stream: {ksqldb_topic}...")
+    print("")
+    logging.info(f"Creating ksqlDB Stream: {ksqldb_topic}...")
     ksqldb(
         args.ksqldb_endpoint,
         f"CREATE STREAM IF NOT EXISTS {ksqldb_topic} (id VARCHAR KEY, key VARCHAR, timestamp BIGINT, random_value DOUBLE) WITH (kafka_topic='{ksqldb_topic}', VALUE_FORMAT='JSON', PARTITIONS={args.partitions}, REPLICAS=1);",
-        verbose=args.verbose,
     )
 
     # Get number of partitions available on the topic (just in case the topic was previously created with a different number of partitions)
@@ -183,8 +158,8 @@ if __name__ == "__main__":
     )
 
     # Produce data to topic
-    print(f"Producing messages to topics: {args.topic} and {ksqldb_topic}...")
-    delivery_callback_partial = partial(delivery_callback, args.verbose)
+    print("")
+    logging.info(f"Producing messages to topics: {args.topic} and {ksqldb_topic}...")
     producer = Producer(kafka_config)
     for n in range(args.messages):
         try:
@@ -205,7 +180,7 @@ if __name__ == "__main__":
                         "random_value": random_value,
                     }
                 ).encode(),
-                "callback": delivery_callback_partial,
+                "callback": delivery_callback,
             }
             if not args.crc32:
                 # Set partition using murmur2_random partitioner
@@ -225,15 +200,14 @@ if __name__ == "__main__":
             ksqldb(
                 args.ksqldb_endpoint,
                 f"INSERT INTO {ksqldb_topic} (id,key,timestamp,random_value) VALUES ('{key_decoded}','{key_decoded}',{timestamp},{random_value});",
-                verbose=args.verbose,
             )
 
         except BufferError:
-            print(
-                f"ERROR: Local producer queue is full ({len(producer)} message(s) awaiting delivery): try again"
+            logging.error(
+                f"Local producer queue is full ({len(producer)} message(s) awaiting delivery): try again"
             )
         except Exception as err:
-            print(f"ERROR: General error when producing key '{key_decoded}': {err}")
+            logging.error(f"General error when producing key '{key_decoded}': {err}")
         finally:
             # Async delivery
             producer.poll(0)
@@ -241,7 +215,8 @@ if __name__ == "__main__":
     producer.flush()
 
     # Check partitions on topic and stream
-    print("Comparing partitions between producer and ksqlDB stream...")
+    print("")
+    logging.info("Comparing partitions between producer and ksqlDB stream...")
     kafka_config.pop("client.id")
     kafka_config.update(
         {
@@ -268,14 +243,14 @@ if __name__ == "__main__":
             if msg is None:
                 no_messages_count -= 1
             elif msg.error():
-                raise print(f"ERROR: {msg.error()}")
+                raise print(msg.error())
             else:
                 if msg.topic() not in keys_validate.keys():
                     keys_validate[msg.topic()] = dict()
                 keys_validate[msg.topic()][msg.key().decode()] = msg.partition()
 
     except Exception as err:
-        print(f"ERROR: {err}")
+        logging.error(f"{err}")
 
     finally:
         # Close down consumer to commit final offsetsand leave consumer group
@@ -292,6 +267,8 @@ if __name__ == "__main__":
                 exception_keys.append(
                     f"Key '{key}': '{args.topic}' = {partition} | '{ksqldb_topic}' = {partition_ksqldb}"
                 )
-        print(f" - Matched partitions: {100 * matched_keys / total_keys:.2f}%")
-        for e in exception_keys:
-            print(f" - {e}")
+        logging.info(f"Matched partitions: {100 * matched_keys / total_keys:.2f}%")
+        if len(exception_keys) > 0:
+            logging.info("Key exceptions")
+            for e in exception_keys:
+                print(f" - {e}")
