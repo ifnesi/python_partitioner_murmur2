@@ -1,5 +1,5 @@
 # python_partitioner_murmur2
-There is no single/common/default partitioner for all Confluent and Apache Kafka resources/libs. For example all producers using librdkafka by default uses `crc32` (such as Python’s confluent_kafka), whilst JAVA ones uses `murmur2_random` (Kafka Streams, ksqlDB, Source Connectors, etc.).
+There is no common partitioner for all Confluent and Apache Kafka resources/libs. For example all producers using librdkafka by default uses `crc32` (such as Python’s confluent_kafka), whilst JAVA ones uses `murmur2_random` (Kafka Streams, ksqlDB, Source Connectors, etc.).
 > The default partitioner in Java producer uses the murmur2 hash function while the default partitioner in librdkafka uses crc32. Because of the different hash functions, a message produced by a Java client and a message produced by a librdkafka client may be assigned to different partitions even with the same partition key (source: https://docs.confluent.io/kafka-clients/librdkafka/current/overview.html#synchronous-writes).
 
 So, if a producer using python (confluent_kafka lib) and Source Connector are producing data to Kafka, then very likely a merge on ksqlDB would not work properly as there would be a partition mismatch.<br><br>
@@ -15,7 +15,7 @@ usage: producer.py [-h]
                    [--random_keys]
                    [--bootstrap_server BOOTSTRAP_SERVER]
                    [--ksqldb_endpoint KSQLDB_ENDPOINT]
-                   [--verbose]
+                   [--debug]
 
 Produce messages using murmur2_random as the partitioner
 
@@ -33,7 +33,7 @@ options:
                         Bootstrap servers (default is 'localhost:9092')
   --ksqldb_endpoint KSQLDB_ENDPOINT
                         ksqlDB endpoint (default is 'http://localhost:8088')
-  --verbose             Display logs
+  --debug               Set logging level to debug
 ```
 
 ## Installation and Configuration
@@ -49,145 +49,263 @@ options:
 ## Running script
 - Start up docker compose: `docker-compose up -d`
 - Waiting until you can access C3: `http://127.0.0.1:9021/` and the ksqlDB cluster is up: `http://127.0.0.1:8088/`
-- Running python script (using murmur2_random partitioner): `python3 producer.py --messages 25 --random_keys --verbose`
+- Running python script (using murmur2_random partitioner): `python3 producer.py --messages 25 --random_keys --debug`
 ```
-Creating topic: test_topic...
-Creating ksqlDB Stream: test_topic_ksql...
-ksqlDB (200): CREATE STREAM IF NOT EXISTS test_topic_ksql (id VARCHAR KEY, key VARCHAR, timestamp BIGINT, random_value DOUBLE) WITH (kafka_topic='test_topic_ksql', VALUE_FORMAT='JSON', PARTITIONS=6, REPLICAS=1);
-Producing messages to topics: test_topic and test_topic_ksql...
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('f8b519073a55456dbdf2dc3738f4eae0','f8b519073a55456dbdf2dc3738f4eae0',1677697918735,0.4824223657962611);
-Message key 'f8b519073a55456dbdf2dc3738f4eae0' delivered to topic 'test_topic', partition #0, offset #10
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('ab08a4f940b842ab8ef6b85f2e69444a','ab08a4f940b842ab8ef6b85f2e69444a',1677697918758,0.9941067481524888);
-Message key 'ab08a4f940b842ab8ef6b85f2e69444a' delivered to topic 'test_topic', partition #4, offset #14
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('bed0d1ebb16d4497ad1ea1220e4a39c7','bed0d1ebb16d4497ad1ea1220e4a39c7',1677697918785,0.9639796298317254);
-Message key 'bed0d1ebb16d4497ad1ea1220e4a39c7' delivered to topic 'test_topic', partition #3, offset #12
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('119e55f30cb544c2b762e2496480e071','119e55f30cb544c2b762e2496480e071',1677697918809,0.30304306560748573);
-Message key '119e55f30cb544c2b762e2496480e071' delivered to topic 'test_topic', partition #3, offset #13
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('c5d5ac8a57cb42599fa476f4b59c633a','c5d5ac8a57cb42599fa476f4b59c633a',1677697918835,0.5769306312721056);
-Message key 'c5d5ac8a57cb42599fa476f4b59c633a' delivered to topic 'test_topic', partition #4, offset #15
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('f7593c21ce864068b595419d63cedcf9','f7593c21ce864068b595419d63cedcf9',1677697918858,0.6907408579722287);
-Message key 'f7593c21ce864068b595419d63cedcf9' delivered to topic 'test_topic', partition #2, offset #15
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('0696d71d7c6b4725afcbf37dfa04ac84','0696d71d7c6b4725afcbf37dfa04ac84',1677697918880,0.3316840160506148);
-Message key '0696d71d7c6b4725afcbf37dfa04ac84' delivered to topic 'test_topic', partition #3, offset #14
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('49b45ee2a5384b2d952ba562630a735f','49b45ee2a5384b2d952ba562630a735f',1677697918901,0.19560081373173344);
-Message key '49b45ee2a5384b2d952ba562630a735f' delivered to topic 'test_topic', partition #2, offset #16
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('2b1e5662fed74ad389f7bad50c10ed0c','2b1e5662fed74ad389f7bad50c10ed0c',1677697918926,0.21316204583720844);
-Message key '2b1e5662fed74ad389f7bad50c10ed0c' delivered to topic 'test_topic', partition #3, offset #15
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('b319322a3479467fb135358f0ef9778d','b319322a3479467fb135358f0ef9778d',1677697918949,0.9744410398130847);
-Message key 'b319322a3479467fb135358f0ef9778d' delivered to topic 'test_topic', partition #3, offset #16
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('86cbdbc16e2f417fb75c7038d0507425','86cbdbc16e2f417fb75c7038d0507425',1677697918974,0.6026726432258764);
-Message key '86cbdbc16e2f417fb75c7038d0507425' delivered to topic 'test_topic', partition #1, offset #9
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('db8c4854bc544a7480d2d9e9310575a3','db8c4854bc544a7480d2d9e9310575a3',1677697918998,0.5758058909060367);
-Message key 'db8c4854bc544a7480d2d9e9310575a3' delivered to topic 'test_topic', partition #2, offset #17
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('96a72b4877f143879faa6fd3b1f20a16','96a72b4877f143879faa6fd3b1f20a16',1677697919021,0.6954771388787635);
-Message key '96a72b4877f143879faa6fd3b1f20a16' delivered to topic 'test_topic', partition #2, offset #18
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('d969e5d0bcb74f159edb6408511d0d69','d969e5d0bcb74f159edb6408511d0d69',1677697919043,0.025921804402782578);
-Message key 'd969e5d0bcb74f159edb6408511d0d69' delivered to topic 'test_topic', partition #0, offset #11
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('54812b41c7454ed290ed39516471ae7e','54812b41c7454ed290ed39516471ae7e',1677697919072,0.35734888781278573);
-Message key '54812b41c7454ed290ed39516471ae7e' delivered to topic 'test_topic', partition #0, offset #12
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('cfac44f6e48f44ed8642a35e9766dbc2','cfac44f6e48f44ed8642a35e9766dbc2',1677697919094,0.3726261936892509);
-Message key 'cfac44f6e48f44ed8642a35e9766dbc2' delivered to topic 'test_topic', partition #4, offset #16
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('bd60974a03a340ba9f8d4fecebfd7681','bd60974a03a340ba9f8d4fecebfd7681',1677697919115,0.8271593404456633);
-Message key 'bd60974a03a340ba9f8d4fecebfd7681' delivered to topic 'test_topic', partition #0, offset #13
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('9d5af9a80192447ba193eda2797bbe3d','9d5af9a80192447ba193eda2797bbe3d',1677697919137,0.06801675209768698);
-Message key '9d5af9a80192447ba193eda2797bbe3d' delivered to topic 'test_topic', partition #1, offset #10
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('0bc8a52f1e2747c28845617f3d221e8f','0bc8a52f1e2747c28845617f3d221e8f',1677697919160,0.2560784435700838);
-Message key '0bc8a52f1e2747c28845617f3d221e8f' delivered to topic 'test_topic', partition #1, offset #11
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('d3322c2bd6c1433ea8bca9d74cbddd17','d3322c2bd6c1433ea8bca9d74cbddd17',1677697919183,0.9700864849398574);
-Message key 'd3322c2bd6c1433ea8bca9d74cbddd17' delivered to topic 'test_topic', partition #4, offset #17
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('76e24e94aa874effa12bfe4d5a76d419','76e24e94aa874effa12bfe4d5a76d419',1677697919207,0.21475436393718472);
-Message key '76e24e94aa874effa12bfe4d5a76d419' delivered to topic 'test_topic', partition #5, offset #15
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('b4bf83fe85d4408294ecc24ccf117841','b4bf83fe85d4408294ecc24ccf117841',1677697919229,0.11875513413144512);
-Message key 'b4bf83fe85d4408294ecc24ccf117841' delivered to topic 'test_topic', partition #5, offset #16
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('4d91ada6cf8b4e0e9e29631b2985778b','4d91ada6cf8b4e0e9e29631b2985778b',1677697919256,0.7506172513843937);
-Message key '4d91ada6cf8b4e0e9e29631b2985778b' delivered to topic 'test_topic', partition #1, offset #12
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('1dcbc9eae48d4f2097ebec04f9d6f40a','1dcbc9eae48d4f2097ebec04f9d6f40a',1677697919284,0.9037342674113482);
-Message key '1dcbc9eae48d4f2097ebec04f9d6f40a' delivered to topic 'test_topic', partition #5, offset #17
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('54af1917561e454085f53a285b3f6fba','54af1917561e454085f53a285b3f6fba',1677697919306,0.2852741063026979);
-Message key '54af1917561e454085f53a285b3f6fba' delivered to topic 'test_topic', partition #3, offset #17
-Comparing partitions between producer and ksqlDB stream...
- - Matched partitions: 100.00%
+INFO 09:35:02.882 - Validating access to ksqlDB: http://localhost:8088...
+DEBUG 09:35:02.887 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:02.904 - http://localhost:8088 "GET / HTTP/1.1" 307 0
+DEBUG 09:35:02.908 - http://localhost:8088 "GET /info HTTP/1.1" 200 132
+
+INFO 09:35:02.940 - Creating topic: test_topic...
+
+INFO 09:35:02.948 - Creating ksqlDB Stream: test_topic_ksql...
+DEBUG 09:35:02.949 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.205 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 426
+DEBUG 09:35:03.206 - ksqlDB (200): CREATE STREAM IF NOT EXISTS test_topic_ksql (id VARCHAR KEY, key VARCHAR, timestamp BIGINT, random_value DOUBLE) WITH (kafka_topic='test_topic_ksql', VALUE_FORMAT='JSON', PARTITIONS=6, REPLICAS=1);
+
+INFO 09:35:03.208 - Producing messages to topics: test_topic and test_topic_ksql...
+DEBUG 09:35:03.212 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.449 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.450 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('4f6ac633fe10497ea96ca5600b6b65df','4f6ac633fe10497ea96ca5600b6b65df',1677749703209,0.4998948387627158);
+DEBUG 09:35:03.450 - Message key '4f6ac633fe10497ea96ca5600b6b65df' delivered to topic 'test_topic', partition #4, offset #0
+DEBUG 09:35:03.454 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.490 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.490 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('b2b7c1b9e7774196ac4265ca810be2e6','b2b7c1b9e7774196ac4265ca810be2e6',1677749703451,0.7338778196645284);
+DEBUG 09:35:03.490 - Message key 'b2b7c1b9e7774196ac4265ca810be2e6' delivered to topic 'test_topic', partition #4, offset #1
+DEBUG 09:35:03.491 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.520 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.520 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('586163f064664dd8b57d5d06fa011429','586163f064664dd8b57d5d06fa011429',1677749703490,0.5860577606939866);
+DEBUG 09:35:03.520 - Message key '586163f064664dd8b57d5d06fa011429' delivered to topic 'test_topic', partition #3, offset #0
+DEBUG 09:35:03.523 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.554 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.555 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('2bf6f49c538a4edba355e270bc0ffb25','2bf6f49c538a4edba355e270bc0ffb25',1677749703521,0.17166123889665563);
+DEBUG 09:35:03.555 - Message key '2bf6f49c538a4edba355e270bc0ffb25' delivered to topic 'test_topic', partition #1, offset #0
+DEBUG 09:35:03.556 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.585 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.586 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('97fdc23322b348ac9333f1167090f9af','97fdc23322b348ac9333f1167090f9af',1677749703555,0.1554764098539072);
+DEBUG 09:35:03.586 - Message key '97fdc23322b348ac9333f1167090f9af' delivered to topic 'test_topic', partition #3, offset #1
+DEBUG 09:35:03.587 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.617 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.618 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('fb5a421ea70a499d976fe6ab90e65bc7','fb5a421ea70a499d976fe6ab90e65bc7',1677749703586,0.006237484848985009);
+DEBUG 09:35:03.618 - Message key 'fb5a421ea70a499d976fe6ab90e65bc7' delivered to topic 'test_topic', partition #0, offset #0
+DEBUG 09:35:03.619 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.648 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.648 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('28bd3e7a035744ff90fbf6188d95e677','28bd3e7a035744ff90fbf6188d95e677',1677749703618,0.6522878586620645);
+DEBUG 09:35:03.648 - Message key '28bd3e7a035744ff90fbf6188d95e677' delivered to topic 'test_topic', partition #4, offset #2
+DEBUG 09:35:03.649 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.677 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.677 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('c32fd1f8045a405bb622e31a68525f2e','c32fd1f8045a405bb622e31a68525f2e',1677749703648,0.6635538558876878);
+DEBUG 09:35:03.677 - Message key 'c32fd1f8045a405bb622e31a68525f2e' delivered to topic 'test_topic', partition #4, offset #3
+DEBUG 09:35:03.678 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.741 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.741 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('2f5736bd70c54b36b80b0b548052cdd1','2f5736bd70c54b36b80b0b548052cdd1',1677749703677,0.9820174377834101);
+DEBUG 09:35:03.741 - Message key '2f5736bd70c54b36b80b0b548052cdd1' delivered to topic 'test_topic', partition #1, offset #1
+DEBUG 09:35:03.742 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.769 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.769 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('747a4ccb4b664f86918e51b0bc744e16','747a4ccb4b664f86918e51b0bc744e16',1677749703741,0.3925805138713211);
+DEBUG 09:35:03.770 - Message key '747a4ccb4b664f86918e51b0bc744e16' delivered to topic 'test_topic', partition #2, offset #0
+DEBUG 09:35:03.770 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.796 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.796 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('9b4a0070bfa941118e92790ed29fd252','9b4a0070bfa941118e92790ed29fd252',1677749703770,0.7550194458159496);
+DEBUG 09:35:03.797 - Message key '9b4a0070bfa941118e92790ed29fd252' delivered to topic 'test_topic', partition #1, offset #2
+DEBUG 09:35:03.797 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.829 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.829 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('9f6437925e5a4ba88c2b5401b879f4f2','9f6437925e5a4ba88c2b5401b879f4f2',1677749703797,0.507293704117725);
+DEBUG 09:35:03.829 - Message key '9f6437925e5a4ba88c2b5401b879f4f2' delivered to topic 'test_topic', partition #4, offset #4
+DEBUG 09:35:03.831 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.860 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.861 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('202d3f13acfa4a688777a2f0551abc8b','202d3f13acfa4a688777a2f0551abc8b',1677749703830,0.6967479964706729);
+DEBUG 09:35:03.861 - Message key '202d3f13acfa4a688777a2f0551abc8b' delivered to topic 'test_topic', partition #2, offset #1
+DEBUG 09:35:03.861 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.890 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.890 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('3414a040925f4097bd5ff24311bc8e3d','3414a040925f4097bd5ff24311bc8e3d',1677749703861,0.3011558402586926);
+DEBUG 09:35:03.890 - Message key '3414a040925f4097bd5ff24311bc8e3d' delivered to topic 'test_topic', partition #1, offset #3
+DEBUG 09:35:03.891 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.916 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.916 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('912e5a52a59b456d95eb35802a6110af','912e5a52a59b456d95eb35802a6110af',1677749703890,0.12099543074077346);
+DEBUG 09:35:03.916 - Message key '912e5a52a59b456d95eb35802a6110af' delivered to topic 'test_topic', partition #4, offset #5
+DEBUG 09:35:03.917 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.944 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.944 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('60fa8a37782e47f0b52d47929d1c3743','60fa8a37782e47f0b52d47929d1c3743',1677749703916,0.7574802889004556);
+DEBUG 09:35:03.944 - Message key '60fa8a37782e47f0b52d47929d1c3743' delivered to topic 'test_topic', partition #3, offset #2
+DEBUG 09:35:03.945 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.969 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.969 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('4746848f382d4b81ba97168186529022','4746848f382d4b81ba97168186529022',1677749703944,0.7432958384878651);
+DEBUG 09:35:03.969 - Message key '4746848f382d4b81ba97168186529022' delivered to topic 'test_topic', partition #3, offset #3
+DEBUG 09:35:03.970 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:03.996 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:03.996 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('e07ac84477fd42428f5a635e6c5dcc9b','e07ac84477fd42428f5a635e6c5dcc9b',1677749703969,0.9093017644064006);
+DEBUG 09:35:03.996 - Message key 'e07ac84477fd42428f5a635e6c5dcc9b' delivered to topic 'test_topic', partition #5, offset #0
+DEBUG 09:35:03.997 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:04.030 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:04.031 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('fd39be8d962d4970be54734416cb6bdc','fd39be8d962d4970be54734416cb6bdc',1677749703996,0.001851234979534766);
+DEBUG 09:35:04.031 - Message key 'fd39be8d962d4970be54734416cb6bdc' delivered to topic 'test_topic', partition #3, offset #4
+DEBUG 09:35:04.032 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:04.059 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:04.059 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('f2d4666861aa48e685f07d01f6fca4d9','f2d4666861aa48e685f07d01f6fca4d9',1677749704031,0.11347558190229734);
+DEBUG 09:35:04.059 - Message key 'f2d4666861aa48e685f07d01f6fca4d9' delivered to topic 'test_topic', partition #5, offset #1
+DEBUG 09:35:04.060 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:04.087 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:04.087 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('036017f566774155b3469123600fd1f5','036017f566774155b3469123600fd1f5',1677749704060,0.14796327150898247);
+DEBUG 09:35:04.087 - Message key '036017f566774155b3469123600fd1f5' delivered to topic 'test_topic', partition #5, offset #2
+DEBUG 09:35:04.088 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:04.115 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:04.115 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('7a036b11914a40ad90878d8768b04055','7a036b11914a40ad90878d8768b04055',1677749704087,0.476991507183701);
+DEBUG 09:35:04.115 - Message key '7a036b11914a40ad90878d8768b04055' delivered to topic 'test_topic', partition #4, offset #6
+DEBUG 09:35:04.116 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:04.160 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:04.160 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('b6cd2f7efe2d42c3b0b36e9b6d1ecdd3','b6cd2f7efe2d42c3b0b36e9b6d1ecdd3',1677749704115,0.745567630430962);
+DEBUG 09:35:04.160 - Message key 'b6cd2f7efe2d42c3b0b36e9b6d1ecdd3' delivered to topic 'test_topic', partition #2, offset #2
+DEBUG 09:35:04.161 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:04.187 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:04.187 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('59d3d8ea997d4124b8170b4a85390a69','59d3d8ea997d4124b8170b4a85390a69',1677749704160,0.1314211195256274);
+DEBUG 09:35:04.187 - Message key '59d3d8ea997d4124b8170b4a85390a69' delivered to topic 'test_topic', partition #5, offset #3
+DEBUG 09:35:04.188 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:35:04.213 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:35:04.213 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('0d77397fa43d4fce8f3ad27767d30e66','0d77397fa43d4fce8f3ad27767d30e66',1677749704187,0.21702802002865318);
+DEBUG 09:35:04.213 - Message key '0d77397fa43d4fce8f3ad27767d30e66' delivered to topic 'test_topic', partition #3, offset #5
+
+INFO 09:35:04.213 - Comparing partitions between producer and ksqlDB stream...
+INFO 09:35:09.408 - Matched partitions: 100.00%
 ```
-- Running python script (using crc32 partitioner): `python3 producer.py --messages 25 --random_keys --verbose --crc32`
+- Running python script (using crc32 partitioner): `python3 producer.py --messages 25 --random_keys --debug --crc32`
 ```
-Creating topic: test_topic...
-Creating ksqlDB Stream: test_topic_ksql...
-ksqlDB (200): CREATE STREAM IF NOT EXISTS test_topic_ksql (id VARCHAR KEY, key VARCHAR, timestamp BIGINT, random_value DOUBLE) WITH (kafka_topic='test_topic_ksql', VALUE_FORMAT='JSON', PARTITIONS=6, REPLICAS=1);
-Producing messages to topics: test_topic and test_topic_ksql...
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('50d364745c2a412ca22ce8cd6f038a01','50d364745c2a412ca22ce8cd6f038a01',1677697870814,0.7458336112009191);
-Message key '50d364745c2a412ca22ce8cd6f038a01' delivered to topic 'test_topic', partition #2, offset #8
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('3d7fda152da64a1196ee4ce94cdb63da','3d7fda152da64a1196ee4ce94cdb63da',1677697870840,0.5016045414680306);
-Message key '3d7fda152da64a1196ee4ce94cdb63da' delivered to topic 'test_topic', partition #4, offset #10
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('34733ce577e54d71b6c729f73a1c2c0e','34733ce577e54d71b6c729f73a1c2c0e',1677697870868,0.0195431397785506);
-Message key '34733ce577e54d71b6c729f73a1c2c0e' delivered to topic 'test_topic', partition #2, offset #9
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('1a812ade7efb4b65b8cc7afbdb176e9b','1a812ade7efb4b65b8cc7afbdb176e9b',1677697870896,0.16141275997075477);
-Message key '1a812ade7efb4b65b8cc7afbdb176e9b' delivered to topic 'test_topic', partition #1, offset #6
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('028c8a57f67d40268a7d18127e220cac','028c8a57f67d40268a7d18127e220cac',1677697870923,0.21845197120226256);
-Message key '028c8a57f67d40268a7d18127e220cac' delivered to topic 'test_topic', partition #5, offset #11
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('29bbcfc224d54850ad23bdce17224806','29bbcfc224d54850ad23bdce17224806',1677697870948,0.35717747354354523);
-Message key '29bbcfc224d54850ad23bdce17224806' delivered to topic 'test_topic', partition #2, offset #10
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('ab080dc855e74342ac42be1afa7252f4','ab080dc855e74342ac42be1afa7252f4',1677697870992,0.1687416670110924);
-Message key 'ab080dc855e74342ac42be1afa7252f4' delivered to topic 'test_topic', partition #3, offset #6
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('1e448c1a67944fb4816faf09c612bc47','1e448c1a67944fb4816faf09c612bc47',1677697871051,0.6466218610774422);
-Message key '1e448c1a67944fb4816faf09c612bc47' delivered to topic 'test_topic', partition #3, offset #7
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('981ed48b45ae48fd8cc4955dbe4b195d','981ed48b45ae48fd8cc4955dbe4b195d',1677697871096,0.6711962000132042);
-Message key '981ed48b45ae48fd8cc4955dbe4b195d' delivered to topic 'test_topic', partition #2, offset #11
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('eb32a6b1b6e643cf8b582c119b025aba','eb32a6b1b6e643cf8b582c119b025aba',1677697871143,0.11333870088981657);
-Message key 'eb32a6b1b6e643cf8b582c119b025aba' delivered to topic 'test_topic', partition #4, offset #11
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('b5c28f7c61fa4d44bf0585539b0606aa','b5c28f7c61fa4d44bf0585539b0606aa',1677697871173,0.8222140348829838);
-Message key 'b5c28f7c61fa4d44bf0585539b0606aa' delivered to topic 'test_topic', partition #5, offset #12
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('fec4282748e5496cb4a01d0c0d6f186a','fec4282748e5496cb4a01d0c0d6f186a',1677697871201,0.9808271160536659);
-Message key 'fec4282748e5496cb4a01d0c0d6f186a' delivered to topic 'test_topic', partition #4, offset #12
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('93f95043aaad4031bc4329f09f15c789','93f95043aaad4031bc4329f09f15c789',1677697871235,0.6595911538784018);
-Message key '93f95043aaad4031bc4329f09f15c789' delivered to topic 'test_topic', partition #1, offset #7
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('adbf8bdc96f84ec1a79315833945e0ef','adbf8bdc96f84ec1a79315833945e0ef',1677697871264,0.30315902110947424);
-Message key 'adbf8bdc96f84ec1a79315833945e0ef' delivered to topic 'test_topic', partition #2, offset #12
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('c143119d31474323b1a4652602db98ed','c143119d31474323b1a4652602db98ed',1677697871290,0.47934871276206115);
-Message key 'c143119d31474323b1a4652602db98ed' delivered to topic 'test_topic', partition #3, offset #8
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('c76171c927e1449d956478aca0781e10','c76171c927e1449d956478aca0781e10',1677697871316,0.19646187450574903);
-Message key 'c76171c927e1449d956478aca0781e10' delivered to topic 'test_topic', partition #2, offset #13
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('80e94962b73943af980e7d7f10564a57','80e94962b73943af980e7d7f10564a57',1677697871339,0.8653338772986416);
-Message key '80e94962b73943af980e7d7f10564a57' delivered to topic 'test_topic', partition #5, offset #13
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('c0cee25b6a04488d959fa335ead3f239','c0cee25b6a04488d959fa335ead3f239',1677697871363,0.47327806909792614);
-Message key 'c0cee25b6a04488d959fa335ead3f239' delivered to topic 'test_topic', partition #3, offset #9
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('38bf4ab5c73a47df860537e42800842a','38bf4ab5c73a47df860537e42800842a',1677697871388,0.8870335958938961);
-Message key '38bf4ab5c73a47df860537e42800842a' delivered to topic 'test_topic', partition #3, offset #10
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('e9b82ba073994f5e8489d04714f14168','e9b82ba073994f5e8489d04714f14168',1677697871414,0.09686154446750794);
-Message key 'e9b82ba073994f5e8489d04714f14168' delivered to topic 'test_topic', partition #0, offset #9
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('45e3703481fc464ea16aee2d10f39daa','45e3703481fc464ea16aee2d10f39daa',1677697871442,0.7425173813109596);
-Message key '45e3703481fc464ea16aee2d10f39daa' delivered to topic 'test_topic', partition #4, offset #13
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('044b7b7053f84d398afcf7bb742df47e','044b7b7053f84d398afcf7bb742df47e',1677697871466,0.028713138982128905);
-Message key '044b7b7053f84d398afcf7bb742df47e' delivered to topic 'test_topic', partition #3, offset #11
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('bed8da0267704853bc76755da9944e7b','bed8da0267704853bc76755da9944e7b',1677697871503,0.6347120129394913);
-Message key 'bed8da0267704853bc76755da9944e7b' delivered to topic 'test_topic', partition #1, offset #8
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('4b34f40335064d02a7fac97b8357a953','4b34f40335064d02a7fac97b8357a953',1677697871529,0.8637895057975871);
-Message key '4b34f40335064d02a7fac97b8357a953' delivered to topic 'test_topic', partition #2, offset #14
-ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('5ebcc9efac2b45f78842176643d38783','5ebcc9efac2b45f78842176643d38783',1677697871552,0.15971217157878426);
-Message key '5ebcc9efac2b45f78842176643d38783' delivered to topic 'test_topic', partition #5, offset #14
-Comparing partitions between producer and ksqlDB stream...
- - Matched partitions: 8.00%
- - Key 'e9b82ba073994f5e8489d04714f14168': 'test_topic' = 0 | 'test_topic_ksql' = 2
- - Key '1a812ade7efb4b65b8cc7afbdb176e9b': 'test_topic' = 1 | 'test_topic_ksql' = 2
- - Key '93f95043aaad4031bc4329f09f15c789': 'test_topic' = 1 | 'test_topic_ksql' = 5
- - Key 'bed8da0267704853bc76755da9944e7b': 'test_topic' = 1 | 'test_topic_ksql' = 0
- - Key '50d364745c2a412ca22ce8cd6f038a01': 'test_topic' = 2 | 'test_topic_ksql' = 4
- - Key '34733ce577e54d71b6c729f73a1c2c0e': 'test_topic' = 2 | 'test_topic_ksql' = 1
- - Key '29bbcfc224d54850ad23bdce17224806': 'test_topic' = 2 | 'test_topic_ksql' = 4
- - Key '981ed48b45ae48fd8cc4955dbe4b195d': 'test_topic' = 2 | 'test_topic_ksql' = 4
- - Key 'adbf8bdc96f84ec1a79315833945e0ef': 'test_topic' = 2 | 'test_topic_ksql' = 0
- - Key 'c76171c927e1449d956478aca0781e10': 'test_topic' = 2 | 'test_topic_ksql' = 5
- - Key '4b34f40335064d02a7fac97b8357a953': 'test_topic' = 2 | 'test_topic_ksql' = 3
- - Key 'ab080dc855e74342ac42be1afa7252f4': 'test_topic' = 3 | 'test_topic_ksql' = 2
- - Key 'c143119d31474323b1a4652602db98ed': 'test_topic' = 3 | 'test_topic_ksql' = 1
- - Key 'c0cee25b6a04488d959fa335ead3f239': 'test_topic' = 3 | 'test_topic_ksql' = 0
- - Key '38bf4ab5c73a47df860537e42800842a': 'test_topic' = 3 | 'test_topic_ksql' = 4
- - Key '044b7b7053f84d398afcf7bb742df47e': 'test_topic' = 3 | 'test_topic_ksql' = 1
- - Key '3d7fda152da64a1196ee4ce94cdb63da': 'test_topic' = 4 | 'test_topic_ksql' = 0
- - Key 'eb32a6b1b6e643cf8b582c119b025aba': 'test_topic' = 4 | 'test_topic_ksql' = 2
- - Key 'fec4282748e5496cb4a01d0c0d6f186a': 'test_topic' = 4 | 'test_topic_ksql' = 0
- - Key '45e3703481fc464ea16aee2d10f39daa': 'test_topic' = 4 | 'test_topic_ksql' = 3
- - Key '028c8a57f67d40268a7d18127e220cac': 'test_topic' = 5 | 'test_topic_ksql' = 0
- - Key '80e94962b73943af980e7d7f10564a57': 'test_topic' = 5 | 'test_topic_ksql' = 1
- - Key '5ebcc9efac2b45f78842176643d38783': 'test_topic' = 5 | 'test_topic_ksql' = 2
+INFO 09:36:39.206 - Validating access to ksqlDB: http://localhost:8088...
+DEBUG 09:36:39.210 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.218 - http://localhost:8088 "GET / HTTP/1.1" 307 0
+DEBUG 09:36:39.222 - http://localhost:8088 "GET /info HTTP/1.1" 200 132
+
+INFO 09:36:39.236 - Creating topic: test_topic...
+
+INFO 09:36:39.247 - Creating ksqlDB Stream: test_topic_ksql...
+DEBUG 09:36:39.248 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.278 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 351
+DEBUG 09:36:39.279 - ksqlDB (200): CREATE STREAM IF NOT EXISTS test_topic_ksql (id VARCHAR KEY, key VARCHAR, timestamp BIGINT, random_value DOUBLE) WITH (kafka_topic='test_topic_ksql', VALUE_FORMAT='JSON', PARTITIONS=6, REPLICAS=1);
+
+INFO 09:36:39.280 - Producing messages to topics: test_topic and test_topic_ksql...
+DEBUG 09:36:39.281 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.307 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.307 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('41375563628f4ff298e9b7b680f8350b','41375563628f4ff298e9b7b680f8350b',1677749799280,0.7217612066062618);
+DEBUG 09:36:39.307 - Message key '41375563628f4ff298e9b7b680f8350b' delivered to topic 'test_topic', partition #4, offset #7
+DEBUG 09:36:39.308 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.333 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.333 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('c3db1e653d744a498ba8e201ea5c807e','c3db1e653d744a498ba8e201ea5c807e',1677749799307,0.7801794552836531);
+DEBUG 09:36:39.333 - Message key 'c3db1e653d744a498ba8e201ea5c807e' delivered to topic 'test_topic', partition #5, offset #4
+DEBUG 09:36:39.334 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.357 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.358 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('6e91f10b438346229ea84989c2aa3b36','6e91f10b438346229ea84989c2aa3b36',1677749799333,0.49594841007368007);
+DEBUG 09:36:39.358 - Message key '6e91f10b438346229ea84989c2aa3b36' delivered to topic 'test_topic', partition #0, offset #1
+DEBUG 09:36:39.359 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.387 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.387 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('864b845d200f4433b71b611be09995c4','864b845d200f4433b71b611be09995c4',1677749799358,0.18680028568807439);
+DEBUG 09:36:39.387 - Message key '864b845d200f4433b71b611be09995c4' delivered to topic 'test_topic', partition #4, offset #8
+DEBUG 09:36:39.388 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.411 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.411 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('757d14e509d245d1b6682f82df2e6541','757d14e509d245d1b6682f82df2e6541',1677749799387,0.7581447224779339);
+DEBUG 09:36:39.411 - Message key '757d14e509d245d1b6682f82df2e6541' delivered to topic 'test_topic', partition #5, offset #5
+DEBUG 09:36:39.412 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.436 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.436 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('ae4e1ee300cf4887b27c33de7f836887','ae4e1ee300cf4887b27c33de7f836887',1677749799411,0.30704413956103693);
+DEBUG 09:36:39.436 - Message key 'ae4e1ee300cf4887b27c33de7f836887' delivered to topic 'test_topic', partition #4, offset #9
+DEBUG 09:36:39.437 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.466 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.466 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('0563a54e450f4a56bd6c283bb5139fab','0563a54e450f4a56bd6c283bb5139fab',1677749799436,0.558273731456149);
+DEBUG 09:36:39.466 - Message key '0563a54e450f4a56bd6c283bb5139fab' delivered to topic 'test_topic', partition #3, offset #6
+DEBUG 09:36:39.467 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.491 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.492 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('c5fc381056bd40158ea6209b9e825f3a','c5fc381056bd40158ea6209b9e825f3a',1677749799466,0.18186861082136885);
+DEBUG 09:36:39.492 - Message key 'c5fc381056bd40158ea6209b9e825f3a' delivered to topic 'test_topic', partition #2, offset #3
+DEBUG 09:36:39.493 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.520 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.520 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('f7bf74b109194eb89b69b55034adbe76','f7bf74b109194eb89b69b55034adbe76',1677749799492,0.07583529317565707);
+DEBUG 09:36:39.520 - Message key 'f7bf74b109194eb89b69b55034adbe76' delivered to topic 'test_topic', partition #0, offset #2
+DEBUG 09:36:39.521 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.545 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.545 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('cbf1cc3a80434221b6f59f882bccf9d7','cbf1cc3a80434221b6f59f882bccf9d7',1677749799521,0.05798826219737396);
+DEBUG 09:36:39.545 - Message key 'cbf1cc3a80434221b6f59f882bccf9d7' delivered to topic 'test_topic', partition #5, offset #6
+DEBUG 09:36:39.546 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.571 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.572 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('e4a998167ba0446d8d4e79b3d62ff9c6','e4a998167ba0446d8d4e79b3d62ff9c6',1677749799545,0.0777392293107485);
+DEBUG 09:36:39.572 - Message key 'e4a998167ba0446d8d4e79b3d62ff9c6' delivered to topic 'test_topic', partition #4, offset #10
+DEBUG 09:36:39.573 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.599 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.599 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('7f1c6b65538349a888e4276933f340ef','7f1c6b65538349a888e4276933f340ef',1677749799572,0.8127143811342272);
+DEBUG 09:36:39.599 - Message key '7f1c6b65538349a888e4276933f340ef' delivered to topic 'test_topic', partition #1, offset #4
+DEBUG 09:36:39.600 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.626 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.626 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('6b04ae0451e04e268dbb197b39f6d642','6b04ae0451e04e268dbb197b39f6d642',1677749799599,0.26449020046469296);
+DEBUG 09:36:39.626 - Message key '6b04ae0451e04e268dbb197b39f6d642' delivered to topic 'test_topic', partition #4, offset #11
+DEBUG 09:36:39.627 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.653 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.653 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('021b94a50ddd40b7b5b8c0204333fe12','021b94a50ddd40b7b5b8c0204333fe12',1677749799626,0.059784726209630934);
+DEBUG 09:36:39.653 - Message key '021b94a50ddd40b7b5b8c0204333fe12' delivered to topic 'test_topic', partition #0, offset #3
+DEBUG 09:36:39.654 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.676 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.677 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('1a6235fc25754c4b9ee001f2b9350975','1a6235fc25754c4b9ee001f2b9350975',1677749799653,0.4293694536057171);
+DEBUG 09:36:39.677 - Message key '1a6235fc25754c4b9ee001f2b9350975' delivered to topic 'test_topic', partition #2, offset #4
+DEBUG 09:36:39.678 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.712 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.712 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('234287509a1642adb1e2e6f0646319e5','234287509a1642adb1e2e6f0646319e5',1677749799677,0.8319958592619964);
+DEBUG 09:36:39.713 - Message key '234287509a1642adb1e2e6f0646319e5' delivered to topic 'test_topic', partition #0, offset #4
+DEBUG 09:36:39.714 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.739 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.739 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('b394c92a6f6a493d9fa2ddd4dcae6e98','b394c92a6f6a493d9fa2ddd4dcae6e98',1677749799713,0.08879792899025518);
+DEBUG 09:36:39.739 - Message key 'b394c92a6f6a493d9fa2ddd4dcae6e98' delivered to topic 'test_topic', partition #2, offset #5
+DEBUG 09:36:39.740 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.766 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.767 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('d7e7c1e59c214da6a29d330fd98879c0','d7e7c1e59c214da6a29d330fd98879c0',1677749799739,0.19202672078696637);
+DEBUG 09:36:39.767 - Message key 'd7e7c1e59c214da6a29d330fd98879c0' delivered to topic 'test_topic', partition #1, offset #5
+DEBUG 09:36:39.768 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.795 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.795 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('4c6c3ba4db714ac3bf481b0f81bd38fb','4c6c3ba4db714ac3bf481b0f81bd38fb',1677749799767,0.28908764138200294);
+DEBUG 09:36:39.795 - Message key '4c6c3ba4db714ac3bf481b0f81bd38fb' delivered to topic 'test_topic', partition #1, offset #6
+DEBUG 09:36:39.796 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.822 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.822 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('038131e939324fe1a61f9314ad8dd905','038131e939324fe1a61f9314ad8dd905',1677749799795,0.5754119007160479);
+DEBUG 09:36:39.822 - Message key '038131e939324fe1a61f9314ad8dd905' delivered to topic 'test_topic', partition #2, offset #6
+DEBUG 09:36:39.823 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.846 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.846 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('0eb6dedb80b346ccb930189897847d51','0eb6dedb80b346ccb930189897847d51',1677749799822,0.9217964236502765);
+DEBUG 09:36:39.846 - Message key '0eb6dedb80b346ccb930189897847d51' delivered to topic 'test_topic', partition #3, offset #7
+DEBUG 09:36:39.847 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.870 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.871 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('0b72dae3fca940bb92b5a680aaad83a7','0b72dae3fca940bb92b5a680aaad83a7',1677749799846,0.15806336738344617);
+DEBUG 09:36:39.871 - Message key '0b72dae3fca940bb92b5a680aaad83a7' delivered to topic 'test_topic', partition #3, offset #8
+DEBUG 09:36:39.872 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.897 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.897 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('81832f860bfc444b8c3de474cf0eeac0','81832f860bfc444b8c3de474cf0eeac0',1677749799871,0.5674732268248345);
+DEBUG 09:36:39.897 - Message key '81832f860bfc444b8c3de474cf0eeac0' delivered to topic 'test_topic', partition #3, offset #9
+DEBUG 09:36:39.898 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.921 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.921 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('320e72432df94b6a8f04cc23a5aa872d','320e72432df94b6a8f04cc23a5aa872d',1677749799897,0.987728382181024);
+DEBUG 09:36:39.921 - Message key '320e72432df94b6a8f04cc23a5aa872d' delivered to topic 'test_topic', partition #0, offset #5
+DEBUG 09:36:39.922 - Starting new HTTP connection (1): localhost:8088
+DEBUG 09:36:39.945 - http://localhost:8088 "POST /ksql HTTP/1.1" 200 2
+DEBUG 09:36:39.945 - ksqlDB (200): INSERT INTO test_topic_ksql (id,key,timestamp,random_value) VALUES ('2c4811cc2ef54f2898d45ac611e8d6c7','2c4811cc2ef54f2898d45ac611e8d6c7',1677749799921,0.298493296183023);
+DEBUG 09:36:39.945 - Message key '2c4811cc2ef54f2898d45ac611e8d6c7' delivered to topic 'test_topic', partition #5, offset #7
+
+INFO 09:36:39.945 - Comparing partitions between producer and ksqlDB stream...
+INFO 09:36:45.009 - Matched partitions: 20.00%
+INFO 09:36:45.010 - Key exceptions
+ - Key '6e91f10b438346229ea84989c2aa3b36': 'test_topic' = 0 | 'test_topic_ksql' = 4
+ - Key 'f7bf74b109194eb89b69b55034adbe76': 'test_topic' = 0 | 'test_topic_ksql' = 2
+ - Key '021b94a50ddd40b7b5b8c0204333fe12': 'test_topic' = 0 | 'test_topic_ksql' = 4
+ - Key '234287509a1642adb1e2e6f0646319e5': 'test_topic' = 0 | 'test_topic_ksql' = 4
+ - Key '320e72432df94b6a8f04cc23a5aa872d': 'test_topic' = 0 | 'test_topic_ksql' = 5
+ - Key '7f1c6b65538349a888e4276933f340ef': 'test_topic' = 1 | 'test_topic_ksql' = 5
+ - Key 'd7e7c1e59c214da6a29d330fd98879c0': 'test_topic' = 1 | 'test_topic_ksql' = 0
+ - Key '4c6c3ba4db714ac3bf481b0f81bd38fb': 'test_topic' = 1 | 'test_topic_ksql' = 2
+ - Key 'c5fc381056bd40158ea6209b9e825f3a': 'test_topic' = 2 | 'test_topic_ksql' = 3
+ - Key '038131e939324fe1a61f9314ad8dd905': 'test_topic' = 2 | 'test_topic_ksql' = 0
+ - Key '0563a54e450f4a56bd6c283bb5139fab': 'test_topic' = 3 | 'test_topic_ksql' = 1
+ - Key '0eb6dedb80b346ccb930189897847d51': 'test_topic' = 3 | 'test_topic_ksql' = 0
+ - Key '0b72dae3fca940bb92b5a680aaad83a7': 'test_topic' = 3 | 'test_topic_ksql' = 4
+ - Key '81832f860bfc444b8c3de474cf0eeac0': 'test_topic' = 3 | 'test_topic_ksql' = 0
+ - Key '41375563628f4ff298e9b7b680f8350b': 'test_topic' = 4 | 'test_topic_ksql' = 2
+ - Key '864b845d200f4433b71b611be09995c4': 'test_topic' = 4 | 'test_topic_ksql' = 1
+ - Key 'ae4e1ee300cf4887b27c33de7f836887': 'test_topic' = 4 | 'test_topic_ksql' = 2
+ - Key 'e4a998167ba0446d8d4e79b3d62ff9c6': 'test_topic' = 4 | 'test_topic_ksql' = 1
+ - Key 'c3db1e653d744a498ba8e201ea5c807e': 'test_topic' = 5 | 'test_topic_ksql' = 1
+ - Key '2c4811cc2ef54f2898d45ac611e8d6c7': 'test_topic' = 5 | 'test_topic_ksql' = 4
 ```
 - Once done with it, stop your docker containers: `docker-compose down`
