@@ -46,7 +46,7 @@ options:
 - Install project requirements: `python3 -m pip install -f requirements.txt`
 - Deactivate the virtual environment: `deactivate`
 
-## Running script
+## Running the demo
 - Activate the virtual environment: `source _venv/bin/activate`
 - Start up docker compose: `docker-compose up -d`
 - Waiting until you can access C3: `http://127.0.0.1:9021/` and the ksqlDB cluster is up: `http://127.0.0.1:8088/`
