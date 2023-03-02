@@ -2,7 +2,7 @@
 There is no common partitioner for all Apache Kafka resources/libs/clients. For example all producers using librdkafka by default uses `crc32` (such as Python’s confluent_kafka), whilst JAVA ones uses `murmur2_random` (Kafka Streams, ksqlDB, Source Connectors, etc.).
 > The default partitioner in Java producer uses the murmur2 hash function while the default partitioner in librdkafka uses crc32. Because of the different hash functions, a message produced by a Java client and a message produced by a librdkafka client may be assigned to different partitions even with the same partition key (source: https://docs.confluent.io/kafka-clients/librdkafka/current/overview.html#synchronous-writes).
 
-So, if a producer using python (confluent_kafka lib) and Source Connector are producing data to Kafka, then very likely a merge on ksqlDB would not work properly as there would be a partition mismatch.<br><br>
+So, if a producer using python (confluent_kafka lib, for example) and Source Connector (Java) are producing data to Kafka, then very likely a merge on ksqlDB would not work properly as there would be a partition mismatch.<br><br>
 The python script on this demo can use either crc32 or murmu2_random as the partitioner. It will produce messages both to the topic `{topic}` (as set when running the python script) as well as to a ksqlDB stream and have it stored on the topic `{topic}-ksql`.
 
 ```
@@ -47,6 +47,7 @@ options:
 - Deactivate the virtual environment: `deactivate`
 
 ## Running script
+- Activate the virtual environment: `source _venv/bin/activate`
 - Start up docker compose: `docker-compose up -d`
 - Waiting until you can access C3: `http://127.0.0.1:9021/` and the ksqlDB cluster is up: `http://127.0.0.1:8088/`
 - Running python script (using murmur2_random partitioner): `python3 producer.py --messages 25 --random_keys --debug`
@@ -309,3 +310,4 @@ INFO 09:36:45.010 - Key exceptions
  - Key '2c4811cc2ef54f2898d45ac611e8d6c7': 'test_topic' = 5 | 'test_topic_ksql' = 4
 ```
 - Once done with it, stop your docker containers: `docker-compose down`
+- Deactivate the virtual environment: `deactivate`
