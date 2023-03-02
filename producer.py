@@ -14,28 +14,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import sys
 import json
-import time
-import uuid
-import random
 import socket
 import logging
 import argparse
+import subprocess
+import pandas as pd
 
 from confluent_kafka import Producer, Consumer
 from confluent_kafka.admin import AdminClient, NewTopic
 
-from utils import delivery_callback, ksqldb, http_request
+from utils import UserData, delivery_callback, ksqldb, http_request
 from utils.murmur2 import Murmur2Partitioner
 
 
 # Global variables
-DEFAULT_TOPIC = "test_topic"
+DEFAULT_TOPIC = "demo_user"
 DEFAULT_PARTITIONS = 6
 DEFAULT_MESSAGES = 10
 DEFAULT_BOOTSTRAP_SERVER = "localhost:9092"
 DEFAULT_KSQLDB_ENDPOINT = "http://localhost:8088"
+KSQLDB_PUSH_QUERY_OUTPUT = "push_query_output.txt"
 keys_validate = dict()
 
 
@@ -75,12 +76,6 @@ if __name__ == "__main__":
         "--crc32",
         dest="crc32",
         help=f"Set librdkafka's default partitioner (crc32), otherwise it will be used murmur2_random",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--random_keys",
-        dest="random_keys",
-        help=f"Set keys as random UUIDs",
         action="store_true",
     )
     parser.add_argument(
@@ -129,27 +124,74 @@ if __name__ == "__main__":
     custom_partitioner = Murmur2Partitioner()
 
     # Create topic if not created already
+    ksqldb_topic = f"{args.topic}_orders".replace("-", "_")
+    ksqldb_merged = f"{args.topic}_orders_merged".replace("-", "_")
     kafka_admin_client = AdminClient(kafka_config)
-    print("")
-    logging.info(f"Creating topic: {args.topic}...")
-    if dict(kafka_admin_client.list_topics().topics).get(args.topic) is None:
-        kafka_admin_client.create_topics(
-            [
-                NewTopic(
-                    args.topic,
-                    args.partitions,
-                    1,
-                )
-            ]
-        )
 
-    # Create ksqlDB stream/topic
-    ksqldb_topic = f"{args.topic}_ksql".replace("-", "_")
+    print("")
+    logging.info(f"Creating topics: {args.topic} and {ksqldb_topic}...")
+    for topic in [args.topic, ksqldb_topic]:
+        if dict(kafka_admin_client.list_topics().topics).get(topic) is None:
+            kafka_admin_client.create_topics(
+                [
+                    NewTopic(
+                        topic,
+                        args.partitions,
+                        1,
+                    )
+                ]
+            )
+
+    # Create ksqlDB stream/table
     print("")
     logging.info(f"Creating ksqlDB Stream: {ksqldb_topic}...")
     ksqldb(
         args.ksqldb_endpoint,
-        f"CREATE STREAM IF NOT EXISTS {ksqldb_topic} (id VARCHAR KEY, key VARCHAR, timestamp BIGINT, random_value DOUBLE) WITH (kafka_topic='{ksqldb_topic}', VALUE_FORMAT='JSON', PARTITIONS={args.partitions}, REPLICAS=1);",
+        f"""CREATE STREAM IF NOT EXISTS {ksqldb_topic} (
+                user_id VARCHAR KEY,
+                ts BIGINT,
+                product_id BIGINT,
+                qty BIGINT,
+                unit_price DOUBLE,
+                channel VARCHAR
+            ) WITH (
+                kafka_topic='{ksqldb_topic}',
+                VALUE_FORMAT='JSON',
+                timestamp = 'ts'
+            );""",
+    )
+
+    print("")
+    logging.info(f"Creating ksqlDB Table: {args.topic}...")
+    ksqldb(
+        args.ksqldb_endpoint,
+        f"""CREATE TABLE IF NOT EXISTS {args.topic} (
+                user_id VARCHAR PRIMARY KEY,
+                name VARCHAR,
+                age BIGINT
+            ) WITH (
+                kafka_topic='{args.topic}',
+                VALUE_FORMAT='JSON'
+            );""",
+    )
+
+    print("")
+    logging.info(f"Creating ksqlDB Stream: {ksqldb_merged}...")
+    ksqldb(
+        args.ksqldb_endpoint,
+        f"""CREATE STREAM IF NOT EXISTS {ksqldb_merged} AS
+            SELECT
+                DEMO_USER_ORDERS.user_id AS user_id,
+                DEMO_USER.name,
+                DEMO_USER.age,
+                product_id,
+                qty,
+                unit_price,
+                channel,
+                ts
+            FROM DEMO_USER_ORDERS
+            LEFT JOIN DEMO_USER ON DEMO_USER_ORDERS.user_id = DEMO_USER.user_id
+        EMIT CHANGES;""",
     )
 
     # Get number of partitions available on the topic (just in case the topic was previously created with a different number of partitions)
@@ -157,36 +199,26 @@ if __name__ == "__main__":
         kafka_admin_client.list_topics(args.topic).topics.get(args.topic).partitions
     )
 
-    # Produce data to topic
+    # Produce data to topics
     print("")
     logging.info(f"Producing messages to topics: {args.topic} and {ksqldb_topic}...")
     producer = Producer(kafka_config)
+    user_data = UserData()
+    initial_ts = None
     for n in range(args.messages):
         try:
-            if args.random_keys:
-                key = uuid.uuid4().hex.encode()
-            else:
-                key = f"{n}".encode()
-            key_decoded = key.decode()
-
-            timestamp = int(time.time() * 1000)
-            random_value = random.random()
+            user_id, user = user_data.generate_user()
+            user_id_bytes = user_id.encode()
             producer_config = {
-                "key": key_decoded,
-                "value": json.dumps(
-                    {
-                        "key": key_decoded,
-                        "timestamp": timestamp,
-                        "random_value": random_value,
-                    }
-                ).encode(),
+                "key": user_id_bytes,
+                "value": json.dumps(user).encode(),
                 "callback": delivery_callback,
             }
             if not args.crc32:
                 # Set partition using murmur2_random partitioner
                 # To use the default lidrbkafka partitioner (crc32) comment out the partition argument below
                 producer_config["partition"] = custom_partitioner.partition(
-                    key,
+                    user_id_bytes,
                     partitions,
                 )
 
@@ -197,17 +229,36 @@ if __name__ == "__main__":
             )
 
             # Produce data to ksqlDB stream
+            order = user_data.generate_user_order()
+            if initial_ts is None:
+                initial_ts = order["ts"]
             ksqldb(
                 args.ksqldb_endpoint,
-                f"INSERT INTO {ksqldb_topic} (id,key,timestamp,random_value) VALUES ('{key_decoded}','{key_decoded}',{timestamp},{random_value});",
+                f"""INSERT INTO {ksqldb_topic} (
+                        user_id,
+                        ts,
+                        product_id,
+                        qty,
+                        unit_price,
+                        channel
+                    ) VALUES (
+                        '{user_id}',
+                        {order["ts"]},
+                        {order["product_id"]},
+                        {order["qty"]},
+                        {order["unit_price"]},
+                        '{order["channel"]}'
+                    );""",
             )
 
         except BufferError:
             logging.error(
                 f"Local producer queue is full ({len(producer)} message(s) awaiting delivery): try again"
             )
+
         except Exception as err:
-            logging.error(f"General error when producing key '{key_decoded}': {err}")
+            logging.error(f"General error when producing key '{user_id}': {err}")
+
         finally:
             # Async delivery
             producer.poll(0)
@@ -258,17 +309,67 @@ if __name__ == "__main__":
         # Print results
         total_keys = len(keys_validate.get(args.topic))
         matched_keys = 0
-        exception_keys = list()
+        partition_exceptions = {
+            "USER_ID": dict(),
+            args.topic: dict(),
+            ksqldb_topic: dict(),
+        }
+        row = 0
         for key, partition in keys_validate.get(args.topic).items():
             partition_ksqldb = keys_validate.get(ksqldb_topic, dict()).get(key)
-            if partition == partition_ksqldb:
+            if partition_ksqldb is None:
+                total_keys -= 1
+            elif partition == partition_ksqldb:
                 matched_keys += 1
             else:
-                exception_keys.append(
-                    f"Key '{key}': '{args.topic}' = {partition} | '{ksqldb_topic}' = {partition_ksqldb}"
-                )
-        logging.info(f"Matched partitions: {100 * matched_keys / total_keys:.2f}%")
-        if len(exception_keys) > 0:
-            logging.info("Key exceptions")
-            for e in exception_keys:
-                print(f" - {e}")
+                partition_exceptions["USER_ID"][row] = key
+                partition_exceptions[args.topic][row] = partition
+                partition_exceptions[ksqldb_topic][row] = partition_ksqldb
+                row += 1
+        logging.info(
+            f"Matched partitions: {100 * matched_keys / (1 if total_keys <= 0 else total_keys):.2f}%"
+        )
+        if row > 0:
+            logging.info("Partition exceptions:")
+            df = pd.DataFrame(partition_exceptions).sort_values(by="USER_ID")
+            print(df.to_string(index=False))
+
+        print("")
+        logging.info("Push query results on Stream/Table join...")
+
+        ksqldb_endpoint = args.ksqldb_endpoint.replace(
+            "127.0.0.1",
+            "ksqldb-server",
+        ).replace(
+            "localhost",
+            "ksqldb-server",
+        )
+        stdout, _ = subprocess.Popen(
+            f"""./ksqldb.sh {ksqldb_endpoint} {ksqldb_merged} {initial_ts} {args.messages}""".split(
+                " "
+            ),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ).communicate()
+
+        headers = list()
+        stream_data = dict()
+        row = 0
+        for item in re.findall(
+            "(\{.+?\})", stdout.decode().replace("\n", " ").replace("\r", " ")
+        ):
+            try:
+                data = json.loads(item)
+            except Exception:
+                data = dict()
+            if "schema" in data.keys() and "queryId" in data.keys():
+                for key in re.findall("`(.+?)`", data["schema"]):
+                    headers.append(key)
+                    stream_data[key] = dict()
+            elif "columns" in data.keys():
+                for n, i in enumerate(data["columns"]):
+                    stream_data[headers[n]][row] = "???" if i is None else str(i)
+                row += 1
+
+        df = pd.DataFrame(stream_data).drop("TS", axis=1).sort_values(by="USER_ID")
+        print(df.to_string(index=False))
