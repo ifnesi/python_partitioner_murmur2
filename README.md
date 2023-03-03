@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS DEMO_USER (
 )
 ```
 
-### Table `DEMO_USER`
+### Table `DEMO_USER_REPARTITION`
 Materialised from the table `DEMO_USER`, that is to do repartition and force the use of ksqlDB's default partitioner murmur2
 ```
 CREATE TABLE IF NOT EXISTS demo_user_repartition
