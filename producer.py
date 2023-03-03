@@ -17,6 +17,7 @@
 import re
 import sys
 import json
+import time
 import socket
 import logging
 import argparse
@@ -35,14 +36,13 @@ DEFAULT_TOPIC = "demo_user"
 DEFAULT_PARTITIONS = 6
 DEFAULT_MESSAGES = 10
 DEFAULT_BOOTSTRAP_SERVER = "localhost:9092"
+DEFAULT_C3_ENDPOINT = "http://localhost:9021"
 DEFAULT_KSQLDB_ENDPOINT = "http://localhost:8088"
-KSQLDB_PUSH_QUERY_OUTPUT = "push_query_output.txt"
-keys_validate = dict()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Produce messages using murmur2_random as the partitioner"
+        description="Produce messages using crc32 or murmur2_random as the partitioner"
     )
     parser.add_argument(
         "--topic",
@@ -86,6 +86,13 @@ if __name__ == "__main__":
         default=DEFAULT_BOOTSTRAP_SERVER,
     )
     parser.add_argument(
+        "--c3_endpoint",
+        dest="c3_endpoint",
+        type=str,
+        help=f"C3 endpoint (default is '{DEFAULT_C3_ENDPOINT}')",
+        default=DEFAULT_C3_ENDPOINT,
+    )
+    parser.add_argument(
         "--ksqldb_endpoint",
         dest="ksqldb_endpoint",
         type=str,
@@ -107,12 +114,13 @@ if __name__ == "__main__":
         datefmt="%H:%M:%S",
     )
 
-    # Validate access to ksqlDB
-    print("")
-    logging.info(f"Validating access to ksqlDB: {args.ksqldb_endpoint}...")
-    status_code, response = http_request(args.ksqldb_endpoint, method="GET")
-    if status_code != 200:
-        sys.exit(0)
+    # Validate HTTP access to C3/ksqlDB
+    for url in [args.c3_endpoint, args.ksqldb_endpoint]:
+        print("")
+        logging.info(f"Validating access to: {url}...")
+        status_code, response = http_request(args.ksqldb_endpoint, method="GET")
+        if status_code != 200:
+            sys.exit(0)
 
     # Set Kafka config
     kafka_config = {
@@ -123,15 +131,24 @@ if __name__ == "__main__":
     # Instantiate custom partitioner murmur2 random
     custom_partitioner = Murmur2Partitioner()
 
-    # Create topic if not created already
-    ksqldb_topic = f"{args.topic}_orders".replace("-", "_")
-    ksqldb_merged = f"{args.topic}_orders_merged".replace("-", "_")
-    kafka_admin_client = AdminClient(kafka_config)
+    # Create topics if not created already
+    topic_user = args.topic
+    topic_orders = f"{topic_user}_orders".replace("-", "_")
+    topic_user_repartition = f"{topic_user}_repartition".replace("-", "_")
 
-    print("")
-    logging.info(f"Creating topics: {args.topic} and {ksqldb_topic}...")
-    for topic in [args.topic, ksqldb_topic]:
+    kafka_admin_client = AdminClient(kafka_config)
+    all_topics = dict(kafka_admin_client.list_topics().topics)
+
+    any_topic_created = False
+    for topic in [
+        topic_user,
+        topic_orders,
+        topic_user_repartition,
+    ]:
         if dict(kafka_admin_client.list_topics().topics).get(topic) is None:
+            any_topic_created = True
+            print("")
+            logging.info(f"Creating topic: {topic}...")
             kafka_admin_client.create_topics(
                 [
                     NewTopic(
@@ -142,12 +159,49 @@ if __name__ == "__main__":
                 ]
             )
 
-    # Create ksqlDB stream/table
+    # Create ksqlDB streams/tables
     print("")
-    logging.info(f"Creating ksqlDB Stream: {ksqldb_topic}...")
+    table_user = topic_user.upper()
+    logging.info(f"Creating ksqlDB Table (if not exists): {table_user}...")
     ksqldb(
         args.ksqldb_endpoint,
-        f"""CREATE STREAM IF NOT EXISTS {ksqldb_topic} (
+        f"""CREATE TABLE IF NOT EXISTS {table_user} (
+                user_id VARCHAR PRIMARY KEY,
+                name VARCHAR,
+                age BIGINT
+            ) WITH (
+                kafka_topic='{topic_user}',
+                VALUE_FORMAT='JSON'
+            );""",
+    )
+    if any_topic_created:
+        time.sleep(5)
+
+    print("")
+    table_user_repartition = topic_user_repartition.upper()
+    logging.info(f"Creating ksqlDB Table (if not exists): {table_user_repartition}...")
+    ksqldb(
+        args.ksqldb_endpoint,
+        f"""CREATE TABLE IF NOT EXISTS {table_user_repartition}
+            WITH (
+                kafka_topic='{topic_user_repartition}',
+                VALUE_FORMAT='JSON'
+            )
+            AS
+            SELECT
+                user_id, name, age
+            FROM {table_user}
+            EMIT CHANGES;""",
+    )
+    if any_topic_created:
+        time.sleep(5)
+
+    print("")
+    stream_orders = topic_orders.upper()
+    logging.info(f"Creating ksqlDB Stream (if not exists): {stream_orders}...")
+    ksqldb(
+        args.ksqldb_endpoint,
+        f"""CREATE STREAM IF NOT EXISTS {stream_orders} (
                 user_id VARCHAR KEY,
                 ts BIGINT,
                 product_id BIGINT,
@@ -155,57 +209,77 @@ if __name__ == "__main__":
                 unit_price DOUBLE,
                 channel VARCHAR
             ) WITH (
-                kafka_topic='{ksqldb_topic}',
+                kafka_topic='{topic_orders}',
                 VALUE_FORMAT='JSON',
                 timestamp = 'ts'
             );""",
     )
+    if any_topic_created:
+        time.sleep(5)
 
     print("")
-    logging.info(f"Creating ksqlDB Table: {args.topic}...")
+    stream_orders_merged = f"{topic_user}_orders_merged".replace("-", "_").upper()
+    logging.info(f"Creating ksqlDB Stream (if not exists): {stream_orders_merged}...")
     ksqldb(
         args.ksqldb_endpoint,
-        f"""CREATE TABLE IF NOT EXISTS {args.topic} (
-                user_id VARCHAR PRIMARY KEY,
-                name VARCHAR,
-                age BIGINT
-            ) WITH (
-                kafka_topic='{args.topic}',
-                VALUE_FORMAT='JSON'
-            );""",
-    )
-
-    print("")
-    logging.info(f"Creating ksqlDB Stream: {ksqldb_merged}...")
-    ksqldb(
-        args.ksqldb_endpoint,
-        f"""CREATE STREAM IF NOT EXISTS {ksqldb_merged} AS
+        f"""CREATE STREAM IF NOT EXISTS {stream_orders_merged} AS
             SELECT
-                DEMO_USER_ORDERS.user_id AS user_id,
-                DEMO_USER.name,
-                DEMO_USER.age,
+                {stream_orders}.user_id AS user_id,
+                {table_user}.name,
+                {table_user}.age,
                 product_id,
                 qty,
                 unit_price,
                 channel,
                 ts
-            FROM DEMO_USER_ORDERS
-            LEFT JOIN DEMO_USER ON DEMO_USER_ORDERS.user_id = DEMO_USER.user_id
+            FROM {stream_orders}
+            LEFT JOIN {table_user} ON {stream_orders}.user_id = {table_user}.user_id
         EMIT CHANGES;""",
     )
+    if any_topic_created:
+        time.sleep(5)
+
+    print("")
+    stream_orders_merged_repartition = (
+        f"{topic_user}_orders_merged_repartition".replace("-", "_").upper()
+    )
+    logging.info(
+        f"Creating ksqlDB Stream (if not exists): {stream_orders_merged_repartition}..."
+    )
+    ksqldb(
+        args.ksqldb_endpoint,
+        f"""CREATE STREAM IF NOT EXISTS {stream_orders_merged_repartition} AS
+            SELECT
+                {stream_orders}.user_id AS user_id,
+                {table_user_repartition}.name,
+                {table_user_repartition}.age,
+                product_id,
+                qty,
+                unit_price,
+                channel,
+                ts
+            FROM {stream_orders}
+            LEFT JOIN {table_user_repartition} ON {stream_orders}.user_id = {table_user_repartition}.user_id
+        EMIT CHANGES;""",
+    )
+    if any_topic_created:
+        time.sleep(5)
 
     # Get number of partitions available on the topic (just in case the topic was previously created with a different number of partitions)
     partitions = len(
-        kafka_admin_client.list_topics(args.topic).topics.get(args.topic).partitions
+        kafka_admin_client.list_topics(topic_user).topics.get(topic_user).partitions
     )
 
     # Produce data to topics
     print("")
-    logging.info(f"Producing messages to topics: {args.topic} and {ksqldb_topic}...")
+    logging.info(
+        f"Producing messages to topics: '{topic_user}' (Python Producer) and '{topic_orders}' (ksqlDB REST API)..."
+    )
     producer = Producer(kafka_config)
     user_data = UserData()
     initial_ts = None
     for n in range(args.messages):
+        print("")
         try:
             user_id, user = user_data.generate_user()
             user_id_bytes = user_id.encode()
@@ -222,19 +296,24 @@ if __name__ == "__main__":
                     partitions,
                 )
 
-            # Produce data to kafka broker
+            # Produce python data to kafka broker
             producer.produce(
-                args.topic,
+                topic_user,
                 **producer_config,
             )
+            logging.info(f"{topic_user}: {user_id} | {json.dumps(user)}")
+            producer.flush()
 
-            # Produce data to ksqlDB stream
+            # Produce data to ksqlDB stream (REST API)
+            time.sleep(
+                0.25
+            )  # Allow the partitioned table (table_user_repartition) to be sync'ed with the original one (table_user) as it is a derived query
             order = user_data.generate_user_order()
             if initial_ts is None:
                 initial_ts = order["ts"]
             ksqldb(
                 args.ksqldb_endpoint,
-                f"""INSERT INTO {ksqldb_topic} (
+                f"""INSERT INTO {topic_orders} (
                         user_id,
                         ts,
                         product_id,
@@ -250,6 +329,7 @@ if __name__ == "__main__":
                         '{order["channel"]}'
                     );""",
             )
+            logging.info(f"{topic_orders}: {user_id} | {json.dumps(order)}")
 
         except BufferError:
             logging.error(
@@ -259,72 +339,69 @@ if __name__ == "__main__":
         except Exception as err:
             logging.error(f"General error when producing key '{user_id}': {err}")
 
-        finally:
-            # Async delivery
-            producer.poll(0)
-
-    producer.flush()
-
     # Check partitions on topic and stream
-    print("")
-    logging.info("Comparing partitions between producer and ksqlDB stream...")
     kafka_config.pop("client.id")
     kafka_config.update(
         {
             "enable.auto.commit": True,
-            "group.id": args.client_id,
             "session.timeout.ms": 6000,
             "auto.offset.reset": "earliest",
             "enable.auto.offset.store": True,
         }
     )
-    consumer = Consumer(kafka_config)
-    consumer.subscribe(
-        [
-            args.topic,
-            ksqldb_topic,
-        ]
-    )
+    for topics in [[topic_user, topic_orders], [topic_user_repartition, topic_orders]]:
+        topic_producer = topics[0]
+        topic_ksqldb = topics[1]
+        kafka_config["group.id"] = f"{args.client_id}_{topic_producer}"
 
-    # Read messages from Kafka
-    no_messages_count = 10
-    try:
-        while no_messages_count > 0:
-            msg = consumer.poll(timeout=0.5)
-            if msg is None:
-                no_messages_count -= 1
-            elif msg.error():
-                raise print(msg.error())
-            else:
-                if msg.topic() not in keys_validate.keys():
-                    keys_validate[msg.topic()] = dict()
-                keys_validate[msg.topic()][msg.key().decode()] = msg.partition()
+        print("")
+        logging.info(
+            f"Comparing partitions between producer ({topic_producer}) and ksqlDB ({topic_ksqldb})..."
+        )
+        consumer = Consumer(kafka_config)
+        consumer.subscribe(topics)
 
-    except Exception as err:
-        logging.error(f"{err}")
+        # Read messages from Kafka
+        no_messages_count = 15
+        keys_validate = dict()
+        try:
+            while no_messages_count > 0:
+                msg = consumer.poll(timeout=0.5)
+                if msg is None:
+                    no_messages_count -= 1
+                elif msg.error():
+                    raise print(msg.error())
+                else:
+                    if msg.topic() not in keys_validate.keys():
+                        keys_validate[msg.topic()] = dict()
+                    keys_validate[msg.topic()][msg.key().decode()] = msg.partition()
 
-    finally:
-        # Close down consumer to commit final offsetsand leave consumer group
-        consumer.close()
+        except Exception as err:
+            logging.error(f"{err}")
+
+        finally:
+            # Close down consumer to commit final offsets and leave consumer group
+            consumer.close()
+
         # Print results
-        total_keys = len(keys_validate.get(args.topic))
+        total_keys = len(keys_validate.get(topic_producer))
         matched_keys = 0
         partition_exceptions = {
             "USER_ID": dict(),
-            args.topic: dict(),
-            ksqldb_topic: dict(),
+            topic_producer: dict(),
+            topic_ksqldb: dict(),
         }
         row = 0
-        for key, partition in keys_validate.get(args.topic).items():
-            partition_ksqldb = keys_validate.get(ksqldb_topic, dict()).get(key)
+        for key, partition in keys_validate.get(topic_producer).items():
+            partition_ksqldb = keys_validate.get(topic_ksqldb, dict()).get(key)
             if partition_ksqldb is None:
                 total_keys -= 1
             elif partition == partition_ksqldb:
                 matched_keys += 1
             else:
                 partition_exceptions["USER_ID"][row] = key
-                partition_exceptions[args.topic][row] = partition
-                partition_exceptions[ksqldb_topic][row] = partition_ksqldb
+                partition_exceptions[topic_producer][row] = partition
+                partition_exceptions[topic_ksqldb][row] = partition_ksqldb
                 row += 1
         logging.info(
             f"Matched partitions: {100 * matched_keys / (1 if total_keys <= 0 else total_keys):.2f}%"
@@ -334,8 +411,10 @@ if __name__ == "__main__":
             df = pd.DataFrame(partition_exceptions).sort_values(by="USER_ID")
             print(df.to_string(index=False))
 
+    # Compare stream/table join for both tables (python producer and ksqldb repartition)
+    for stream in [stream_orders_merged, stream_orders_merged_repartition]:
         print("")
-        logging.info("Push query results on Stream/Table join...")
+        logging.info(f"Push query results on Stream/Table join: {stream}")
 
         ksqldb_endpoint = args.ksqldb_endpoint.replace(
             "127.0.0.1",
@@ -345,7 +424,7 @@ if __name__ == "__main__":
             "ksqldb-server",
         )
         stdout, _ = subprocess.Popen(
-            f"""./ksqldb.sh {ksqldb_endpoint} {ksqldb_merged} {initial_ts} {args.messages}""".split(
+            f"""./ksqldb.sh {ksqldb_endpoint} {stream} {initial_ts} {args.messages}""".split(
                 " "
             ),
             stdout=subprocess.PIPE,
