@@ -27,14 +27,12 @@ import murmurhash2
 from functools import partial
 
 
+# Global variables
 ROUNDS = 25
-MAX_KEYS = 100000
-
-m2 = partial(murmurhash2.murmurhash2, seed=0x9747B28C)
-m3 = partial(murmurhash2.murmurhash3, seed=0x9747B28C)
-hashing_functions = {
-    "murmur2": m2,
-    "murmur3": m3,
+MAX_KEYS = 1000000
+HASHING_FUNCTIONS = {
+    "murmur2": partial(murmurhash2.murmurhash2, seed=0x9747B28C),
+    "murmur3": partial(murmurhash2.murmurhash3, seed=0x9747B28C),
     "crc32..": zlib.crc32,
     "adler..": zlib.adler32,
     "md5....": hashlib.md5,
@@ -63,7 +61,7 @@ for i in range(ROUNDS):
         ).encode()
         for _ in range(MAX_KEYS)
     )
-    for h, f in hashing_functions.items():
+    for h, f in HASHING_FUNCTIONS.items():
         print(f" - Generating hashes for {h.strip('.')}")
         start = time.time()
         for key in keys:
