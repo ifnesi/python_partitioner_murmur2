@@ -48,7 +48,7 @@ HASHING_FUNCTIONS = {
 results = dict()
 for i in range(ROUNDS):
     print(f"Round #{i + 1}/{ROUNDS}:")
-    print(f"Generating {MAX_KEYS} keys...")
+    print(f" - Generating {MAX_KEYS} keys...")
     keys = tuple(
         "".join(
             random.choices(
