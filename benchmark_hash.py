@@ -18,8 +18,9 @@
 # Generate {MAX_KEYS} keys, have them hashed {ROUNDS} times, then calculate the average keys/sec
 
 import time
-import uuid
 import zlib
+import string
+import random
 import hashlib
 import murmurhash2
 
@@ -27,7 +28,7 @@ from functools import partial
 
 
 ROUNDS = 25
-MAX_KEYS = 500000
+MAX_KEYS = 100000
 
 m2 = partial(murmurhash2.murmurhash2, seed=0x9747B28C)
 m3 = partial(murmurhash2.murmurhash3, seed=0x9747B28C)
@@ -46,14 +47,24 @@ hashing_functions = {
     "blake2s": hashlib.blake2s,
 }
 
-print(f"Generating {MAX_KEYS} keys...")
-keys = [uuid.uuid4().hex.encode() for _ in range(MAX_KEYS)]
-
 results = dict()
 for i in range(ROUNDS):
     print(f"Round #{i + 1}/{ROUNDS}:")
+    print(f"Generating {MAX_KEYS} keys...")
+    keys = tuple(
+        "".join(
+            random.choices(
+                string.printable,
+                k=random.randint(
+                    4,
+                    32,
+                ),
+            )
+        ).encode()
+        for _ in range(MAX_KEYS)
+    )
     for h, f in hashing_functions.items():
-        print(f" - Generating hashes for {h.strip('.')}...")
+        print(f" - Generating hashes for {h.strip('.')}")
         start = time.time()
         for key in keys:
             f(key)
