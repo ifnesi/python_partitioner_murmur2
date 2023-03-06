@@ -1,4 +1,5 @@
 _venv
 __pycache__
+histograms
 *.pyc
 .DS_Store
