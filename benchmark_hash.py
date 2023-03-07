@@ -29,13 +29,14 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from matplotlib.ticker import StrMethodFormatter
 from functools import partial
 
 
 # Global variables
+KEY_MIN_CHARS = 4
+KEY_MAX_CHARS = 32
 ROUNDS = 25
-MAX_KEYS = 40
+MAX_KEYS = 100000
 PARTITIONS = 24  # to calculate distribution histogram
 FOLDER_HISTOGRAM = "histograms"
 HASHING_FUNCTIONS = {
@@ -63,8 +64,8 @@ for i in range(ROUNDS):
             random.choices(
                 string.printable,
                 k=random.randint(
-                    4,
-                    32,
+                    KEY_MIN_CHARS,
+                    KEY_MAX_CHARS,
                 ),
             )
         ).encode()
