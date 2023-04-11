@@ -74,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--crc32",
         dest="crc32",
-        help=f"Set librdkafka's default partitioner (crc32), otherwise it will be used murmur2_random",
+        help=f"Set librdkafka's default partitioner (crc32: consistent_random), otherwise it will be used murmur2_random",
         action="store_true",
     )
     parser.add_argument(
