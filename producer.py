@@ -28,7 +28,6 @@ from confluent_kafka import Producer, Consumer
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from utils import UserData, delivery_callback, ksqldb, http_request
-from utils.murmur2 import Murmur2Partitioner
 
 
 # Global variables
@@ -127,9 +126,6 @@ if __name__ == "__main__":
         "bootstrap.servers": args.bootstrap_server,
         "client.id": args.client_id,
     }
-
-    # Instantiate custom partitioner murmur2 random
-    custom_partitioner = Murmur2Partitioner()
 
     # Create topics if not created already
     topic_user = args.topic
@@ -275,6 +271,13 @@ if __name__ == "__main__":
     logging.info(
         f"Producing messages to topics: '{topic_user}' (Python Producer) and '{topic_orders}' (ksqlDB REST API)..."
     )
+
+    # Set partitioner
+    if args.crc32:
+        kafka_config["partitioner"] = "consistent_random"
+    else:
+        kafka_config["partitioner"] = "murmur2_random"
+
     producer = Producer(kafka_config)
     user_data = UserData()
     initial_ts = None
@@ -288,13 +291,6 @@ if __name__ == "__main__":
                 "value": json.dumps(user).encode(),
                 "callback": delivery_callback,
             }
-            if not args.crc32:
-                # Set partition using murmur2_random partitioner
-                # To use the default lidrbkafka partitioner (crc32) comment out the partition argument below
-                producer_config["partition"] = custom_partitioner.partition(
-                    user_id_bytes,
-                    partitions,
-                )
 
             # Produce python data to kafka broker
             producer.produce(
@@ -341,6 +337,7 @@ if __name__ == "__main__":
 
     # Check partitions on topic and stream
     kafka_config.pop("client.id")
+    kafka_config.pop("partitioner")
     kafka_config.update(
         {
             "enable.auto.commit": True,
