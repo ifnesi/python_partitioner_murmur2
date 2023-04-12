@@ -107,13 +107,13 @@ usage: producer.py [-h]
                   [--partitions PARTITIONS]
                   [--messages MESSAGES]
                   [--client_id CLIENT_ID]
-                  [--crc32]
                   [--bootstrap_server BOOTSTRAP_SERVER]
+                  [--partitioner {murmur2_random,murmur2,consistent_random,consistent,fnv1a_random,fnv1a,random}]
                   [--c3_endpoint C3_ENDPOINT]
                   [--ksqldb_endpoint KSQLDB_ENDPOINT]
                   [--debug]
 
-Produce messages using crc32 or murmur2_random as the partitioner
+Produce messages using crc32 (consistent_random) or murmur2 (murmur2_random) as the partitioner
 
 options:
   -h, --help            show this help message and exit
@@ -123,9 +123,10 @@ options:
   --messages MESSAGES   Number of messages to be produced (default is 10)
   --client_id CLIENT_ID
                         Producer Client ID (default is your hostname)
-  --crc32               Set librdkafka's default partitioner (crc32), otherwise it will be used murmur2_random
   --bootstrap_server BOOTSTRAP_SERVER
                         Bootstrap servers (default is 'localhost:9092')
+  --partitioner {murmur2_random,murmur2,consistent_random,consistent,fnv1a_random,fnv1a,random}
+                        Set partitioner (default: murmur2_random)
   --c3_endpoint C3_ENDPOINT
                         C3 endpoint (default is 'http://localhost:9021')
   --ksqldb_endpoint KSQLDB_ENDPOINT
@@ -218,7 +219,7 @@ b8f38627e83b28d94875723aeca0a02f       Adriel Pratt  61       1045   7      51.0
 bb867da60ddb05a208297bbfb88d6a3f    Jolie Valentine  37       1151   7      87.76 partner
 ```
 
-- Running python script (using crc32 partitioner): `python3 producer.py --messages 10 --crc32`
+- Running python script (using crc32 partitioner): `python3 producer.py --messages 10 --partitioner consistent_random`
 ```
 INFO 11:48:32.965 - Validating access to: http://localhost:9021...
 

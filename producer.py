@@ -40,8 +40,17 @@ DEFAULT_KSQLDB_ENDPOINT = "http://localhost:8088"
 
 
 if __name__ == "__main__":
+    PARTITIONERS = [
+        "murmur2_random",
+        "murmur2",
+        "consistent_random",
+        "consistent",
+        "fnv1a_random",
+        "fnv1a",
+        "random",
+    ]
     parser = argparse.ArgumentParser(
-        description="Produce messages using crc32 or murmur2_random as the partitioner"
+        description="Produce messages using crc32 (consistent_random) or murmur2 (murmur2_random) as the partitioner"
     )
     parser.add_argument(
         "--topic",
@@ -72,17 +81,19 @@ if __name__ == "__main__":
         default=socket.gethostname(),
     )
     parser.add_argument(
-        "--crc32",
-        dest="crc32",
-        help=f"Set librdkafka's default partitioner (crc32: consistent_random), otherwise it will be used murmur2_random",
-        action="store_true",
-    )
-    parser.add_argument(
         "--bootstrap_server",
         dest="bootstrap_server",
         type=str,
         help=f"Bootstrap servers (default is '{DEFAULT_BOOTSTRAP_SERVER}')",
         default=DEFAULT_BOOTSTRAP_SERVER,
+    )
+    parser.add_argument(
+        "--partitioner",
+        dest="partitioner",
+        help=f"Set partitioner (default: {PARTITIONERS[0]})",
+        type=str,
+        default=PARTITIONERS[0],
+        choices=PARTITIONERS,
     )
     parser.add_argument(
         "--c3_endpoint",
@@ -125,6 +136,7 @@ if __name__ == "__main__":
     kafka_config = {
         "bootstrap.servers": args.bootstrap_server,
         "client.id": args.client_id,
+        "partitioner": args.partitioner,
     }
 
     # Create topics if not created already
@@ -271,12 +283,6 @@ if __name__ == "__main__":
     logging.info(
         f"Producing messages to topics: '{topic_user}' (Python Producer) and '{topic_orders}' (ksqlDB REST API)..."
     )
-
-    # Set partitioner
-    if args.crc32:
-        kafka_config["partitioner"] = "consistent_random"
-    else:
-        kafka_config["partitioner"] = "murmur2_random"
 
     producer = Producer(kafka_config)
     user_data = UserData()
