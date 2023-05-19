@@ -77,7 +77,7 @@ class Partitioner:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Get the partition number using either murmur2 (default on Apache Kafka Java lib) or crc32 (default librdkafka lib) hashing functions"
+        description="Get the partition number using either murmur2 (default on Apache Kafka Java lib) or crc32 (default on librdkafka lib) hashing functions"
     )
     parser.add_argument(
         "--partitions",
