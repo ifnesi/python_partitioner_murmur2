@@ -51,7 +51,7 @@ class Partitioner:
             if not isinstance(key, bytes):
                 key = f"{key}".encode("utf-8")
             if partitioner == "murmur2":
-                hash = self._murmur2(key) & self._murmur2factor
+                hash = self._murmur2(key, self._murmur2seed) & self._murmur2factor
             elif partitioner == "crc32":
                 hash = self._crc32(key)
             else:
@@ -67,10 +67,11 @@ class Partitioner:
     def _murmur2(
         self,
         data: bytes,
+        seed: int,
     ) -> int:
         return murmurhash2.murmurhash2(
             data,
-            self._murmur2seed,
+            seed,
         )
 
 
@@ -97,8 +98,8 @@ if __name__ == "__main__":
         dest="partitioner",
         help=f"Set partitioner (default: murmur2)",
         type=str,
-        default="murmur2",
         choices=["murmur2", "crc32"],
+        default="murmur2",
     )
     args = parser.parse_args()
 
